@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "dynatrace-managed": {
+      "command": "npx",
+      "args": ["-y", "@dynatrace-oss/dynatrace-managed-mcp-server@<pinned-version>"],
+      "env": { "DT_ENVIRONMENT_CONFIGS": "${DT_ENVIRONMENT_CONFIGS}" }
+    }
+  }
+}
