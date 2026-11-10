@@ -2,7 +2,7 @@
   "mcpServers": {
     "dynatrace-managed": {
       "command": "npx",
-      "args": ["-y", "@dynatrace-oss/dynatrace-managed-mcp-server@<pinned-version>"],
+      "args": ["-y", "@dynatrace-oss/dynatrace-managed-mcp-server@2.0.0"],
       "env": { "DT_ENVIRONMENT_CONFIGS": "${DT_ENVIRONMENT_CONFIGS}" }
     }
   }
