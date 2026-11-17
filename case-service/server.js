@@ -180,11 +180,52 @@ function getStats() {
   return statsCache.inflight;
 }
 
+// --- Dashboard snapshot leases ---------------------------------------------
+// Each dashboard request takes a "snapshot lease" so concurrent dashboard reads
+// are reconciled against one consistent view of the aggregates. Before a new
+// lease is granted, every lease still registered is re-validated (a heartbeat
+// tick per holder) to make sure its owner is alive and not about to write.
+//
+// BUG (intentional, for the demo): leases are only released on the error path.
+// On success the lease is never given back, so the registry grows with every
+// call, each new call waits on more stale holders than the last, and the
+// retained payloads grow the heap. Latency creeps up for /cases/stats only;
+// everything else in the service stays healthy. A restart clears it.
+const LEASE_TICK_MS = parseInt(process.env.SNAPSHOT_LEASE_TICK_MS || '4', 10);
+const LEASE_MAX_WAIT_MS = parseInt(process.env.SNAPSHOT_LEASE_MAX_WAIT_MS || '15000', 10);
+const LEASE_PAYLOAD_KB = parseInt(process.env.SNAPSHOT_LEASE_PAYLOAD_KB || '64', 10);
+const heldLeases = new Map();
+let leaseSeq = 0;
+
+async function acquireSnapshotLease() {
+  const holders = heldLeases.size;
+  if (LEASE_TICK_MS > 0 && holders > 0) {
+    // Heartbeat each existing holder in turn (serial on purpose: "fair" lock).
+    await sleep(Math.min(LEASE_MAX_WAIT_MS, holders * LEASE_TICK_MS));
+  }
+  const lease = {
+    id: ++leaseSeq,
+    takenAt: Date.now(),
+    snapshot: Buffer.alloc(LEASE_PAYLOAD_KB * 1024, 1) // retained working set
+  };
+  heldLeases.set(lease.id, lease);
+  return lease;
+}
+
+function releaseSnapshotLease(lease) {
+  heldLeases.delete(lease.id);
+}
+
 app.get('/cases/stats', async (_req, res, next) => {
+  let lease;
   try {
     await maybeSlowdown();
-    res.json(await getStats());
+    lease = await acquireSnapshotLease();
+    const stats = await getStats();
+    res.json(stats);
+    // Missing: releaseSnapshotLease(lease) on the success path.
   } catch (err) {
+    if (lease) releaseSnapshotLease(lease);
     next(err);
   }
 });
