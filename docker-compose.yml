@@ -113,6 +113,8 @@ services:
     container_name: csa-loadgen
     environment:
       GATEWAY_URL: http://gateway:8080
+      # Headroom so slow dashboard calls don't starve the rest of the traffic mix.
+      MAX_IN_FLIGHT: "100"
       PGHOST: postgres
       PGPORT: "5432"
       PGUSER: casemgmt
